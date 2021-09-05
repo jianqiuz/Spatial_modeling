@@ -18,8 +18,8 @@ library(MASS)
 ###spatial distance
 ```{r probobility}
 ##create the log normal distribution
-y=rnorm(1000,-4,0.25) #define stdev as 0.25,1,2 
-delta<-10^(y) ##diffusion distance
+y=rnorm(1000,-4,0.1) #stdeve as 0.25, 0.5, 1
+delta<-10^(y) ##diffusion distance average as 100 um
 std<-sd(delta)
 
 
@@ -158,7 +158,7 @@ t_result<-data.frame(nrow=1000)
 
 for (i in 1:length(delta)){
 
-  new<-solveCSS(data$mvol, data$po, data$bd, delta[i], doc[i], data$oxy, 1e-5, 1e-4,1.16e-6)#vmax=1 d-1
+  new<-solveCSS(data$mvol, data$po, data$bd, delta[i], data$soc, data$oxy, 1e-5, 1e-4,1.16e-6)#vmax=1 d-1
   #nvol<-new*delta[i]^3
   t_result = cbind(t_result, new)} ##per colony
 
@@ -176,7 +176,7 @@ colnames(stat_sum) <- features
 colnames(stat_sum) [1]<- "rs"
 stat_sum$rs<-data$rs      
 pred_sum<-melt(stat_sum, id.vars="rs")
-maxc<-max(pred_sum$value)
+maxc<-max(pred_sum$value)   #per colony
 pred_sum$value<-pred_sum$value/maxc
 
 
@@ -206,7 +206,7 @@ delta2<-mean(delta)
 
 doc1<-median(doc)
 
-ava1<-solveCSS(data$mvol, data$po, data$bd, delta1, doc1, data$oxy, 1e-5, 1e-4,1.16e-6)#vmax=1 d-1
+ava1<-solveCSS(data$mvol, data$po, data$bd, delta1, data$soc, data$oxy, 1e-5, 1e-4,1.16e-6)#vmax=1 d-1
 
 
 
