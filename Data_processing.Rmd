@@ -1,0 +1,346 @@
+---
+title: "Model fitting"
+author: "Jianqiu Zheng"
+date: "4/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(broom)
+library(ggplot2)
+library(minpack.lm)
+
+```
+
+
+# Fitting polynomial function
+
+```{r field}
+fdata <- read.csv(file = 'field_dataset.csv') 
+var_study <- unique (fdata$id) %>% sort() #unique study names
+
+model_sum <- function (fdata){
+    t_results <- data.frame()
+    
+    for (i in 1:length(var_study)) {
+    sub_study <- subset(fdata, id == var_study[i])
+        # fitting 2nd order polynomial y=ax^2+bx+c
+        fit_lm <- lm(ra ~ rs + I(rs^2), data = sub_study)
+        
+        fit_a <- summary(fit_lm)$coefficients[3,1] %>% round(6)
+        fit_b <- summary(fit_lm)$coefficients[2,1] %>% round(6)
+        fit_c <- summary(fit_lm)$coefficients[1,1] %>% round(6)
+        p_a <- summary(fit_lm)$coefficients[3,4]%>% round(6)
+        p_b <- summary(fit_lm)$coefficients[2,4]%>% round(6)
+        p_c <- summary(fit_lm)$coefficients[1,4]%>% round(6)
+        fit_R2 <- summary(fit_lm)$adj.r.squared %>% round(6)
+        
+        f_pred = predict(fit_lm)
+        
+        obs <- nrow(sub_study)
+        
+        sub_study %>% mutate(f_pred = predict(fit_lm), f_res = residuals(fit_lm)) -> sub_study
+        f_RMSE <- (sum((sub_study$f_pred-sub_study$ra)^2) / obs)^0.5 %>% round(3)
+        f_d <- (1- sum((sub_study$f_pred-sub_study$ra)^2)/sum((sub_study$ra-mean(sub_study$ra))^2)) %>% round(3)
+
+      lm_sum = data.frame(sub_study$id, sub_study$rs, sub_study$ra, fit_a, fit_b,fit_c,p_a,p_b,p_c, f_pred, fit_R2, f_RMSE, f_d)
+          
+          # output all statistic results to "t_results"
+          t_results = rbind(t_results, lm_sum)
+          
+    }
+      return (t_results)
+    }
+ 
+stat_sum<-model_sum(fdata)   
+write.csv(stat_sum, "field_emp_fitting_summary.csv")
+
+
+stat_sum %>% filter(p_a <0.05) %>% filter(p_b<0.05)  %>% nrow()  #986 out of 986 (field)
+stat_sum %>% filter(f_d>0.6) %>% nrow()  ##212 out of 740
+
+sub_sig<-stat_sum %>% filter(p_a <0.05) %>% filter(p_b<0.05)
+
+unique(stat_sum$sub_study.id)
+unique(sub_sig$sub_study.id)  #5 site out of 24(field)
+
+```
+
+
+
+###indivisual fitting of Yan model
+##significant prediction errors/biases no matter what
+
+```{r field}
+fdata$f_pred<-stat_sum$f_pred
+
+var_study <- unique (fdata$id) %>% sort() #unique study names
+
+model_sum <- function (fdata){
+    t_results <- data.frame()
+    
+    for (i in 1:length(var_study)) {
+    sub_study <- subset(fdata, id == var_study[i])
+        ind<-which.max(sub_study$ra)
+        opt<-sub_study$mvol[ind] ##optimum water content
+        sub_study1<-sub_study[1:ind-1, ]
+        sub_study2<-sub_study[ind:length(sub_study$mvol), ]
+        
+       fm1<-(0.2+opt)/(sub_study1$mvol+0.2)
+       fm2<-sub_study1$mvol/opt
+       fm3<-(sub_study2$porosity-sub_study2$mvol)/(sub_study2$porosity-opt)
+        
+        for (j in 1:length(sub_study1$mvol))
+             {curve.a = nlsLM(rs ~ fm1*fm2^(1+a*2),
+                     start=list(a=0.5),
+                     data = sub_study1)
+             sub_study1$yan_pred = predict(curve.a)
+             sub_study1$yan_res = residuals (curve.a)}
+         for (k in 1:length(sub_study2$mvol))
+              {
+             sub_study2$yan_pred = fm3^0.75
+             sub_study2$yan_res = sub_study2$ra-sub_study2$yan_pred}
+       
+        sub_result<-rbind(sub_study1, sub_study2)
+        
+        obs <- nrow(sub_study)
+        
+        yan_RMSE <- (sum((sub_result$yan_pred-sub_result$ra)^2) / obs)^0.5 %>% round(3)
+        yan_d <- (1- sum((sub_result$yan_pred-sub_result$ra)^2)/sum((sub_result$ra-mean(sub_result$ra))^2)) %>% round(3)
+        emp_d <- (1- sum((sub_result$f_pred-sub_result$ra)^2)/sum((sub_result$ra-mean(sub_result$ra))^2)) %>% round(3)
+       
+      lm_sum = data.frame(sub_result, yan_RMSE, yan_d, emp_d)
+          
+          # output all statistic results to "t_results"
+          t_results = rbind(t_results, lm_sum)
+          
+    }
+      return (t_results)
+    }
+ 
+stat_sum<-model_sum(fdata)   
+write.csv(stat_sum, "field_yan_fitting_summary.csv")
+
+stat_sum %>% filter(yan_d>0.6) %>% nrow()  ##155 out of 740
+
+```
+
+
+#===prepare f_yan parameters====
+```{r fityan}
+
+stat_sum %>% filter(p_a <0.05) %>% filter(p_b<0.05)  %>% nrow()  #528 out of 740 (field)
+stat_sum %>% filter(yan_d>0.5) %>% nrow   ##106 out of 740(field)
+sub_sig<-stat_sum %>% filter(p_a <0.05) %>% filter(p_b<0.05)
+
+unique(stat_sum$sub_study.id)
+unique(sub_sig$sub_study.id)  #5 site out of 24(field)
+#sub_sig$fit_a<-0.5
+sub_sig$fit_b<-1.7
+#====
+fopt<-function(mvol,po,opt,a,b,fm){
+  for (i in 1:length(mvol))
+    if (mvol[i]<opt[i]) {fm[i]<-(0.2+opt[i])/(mvol[i]+0.2)*(mvol[i]/opt[i])^(1+2*a[i]) }
+    else {fm[i]<-(po[i]-mvol[i])^b[i]/(po[i]-opt[i])^b[i]}
+  result<-fm
+  return (result)}
+
+mvol<-sub_sig$sub_study.mvol
+po<-sub_sig$sub_study.porosity
+opt<-sub_sig$opt
+a<-sub_sig$fit_a
+b<-sub_sig$fit_b
+fm<-0
+out<-fopt(mvol, po, opt,a,b,fm)
+sub_sig$y_pred<-out
+
+###residual plot  (residual=observed -predict)
+
+###residual plot  (residual=observed -predict)
+res<-data.frame(rs=stat_sum$ra) 
+res$poly<-stat_sum$ra-stat_sum$f_pred
+res$yan<-stat_sum$ra-stat_sum$yan_pred
+pres<-reshape2::melt(res, id.vars=c("rs"))
+
+plot1<-ggplot(pres, aes(x=rs, y=value,color=variable))+
+       geom_point(aes(fill=variable), alpha=0.3,size=1.2)+
+       geom_smooth(aes(color=variable, fill=variable),method=loess, size=1.2)+
+       scale_color_manual(values = c("#e08214","#542788"))+
+       scale_fill_manual(values = c("#e08214","#542788"))+ 
+       scale_y_continuous(limits=c(-1,1))+ 
+       scale_x_continuous(limits=c(0,1))+ 
+       geom_hline(yintercept=0, color="black",linetype="dashed")+
+       theme(text = element_text(size=16)) 
+plot2<-plot1+theme_linedraw()+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+theme(text = element_text(size=16))
+print(plot2)
+
+
+
+#pdf("field_res_sig.pdf", width=4.3, height=3)
+plot2
+#dev.off()
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+#
+
+```{r filter}
+
+#===prepare f_yan parameters====
+fdata$f_pred<-stat_sum$f_pred
+fdata$opt<-fdata$porosity*0.65
+
+fa<-function(clay,f){
+  for (i in 1:length(clay))
+    if (clay[i] < 0.016) {f[i]<-0}
+  else if (clay[i] < 0.37) {f[i]<-2.8*clay[i]-0.046 }
+  else {f[i]<-1}
+  a<-f
+  return (a)}
+clay<-fdata$clay
+f<-0
+
+param_a<-fa(clay,f)
+fdata$yan_a<-param_a
+#====
+fopt<-function(mvol,po,opt,a,fm){
+  for (i in 1:length(mvol))
+    if (mvol[i]<opt[i]) {fm[i]<-(1.5+opt[i])/(mvol[i]+1.5)*(mvol[i]/opt[i])^(1+2*a[i]) }
+    else {fm[i]<-(po[i]-mvol[i])^0.75/(po[i]-opt[i])^0.75}
+  result<-fm
+  return (result)}
+
+mvol<-fdata$mvol
+po<-fdata$porosity
+opt<-fdata$opt
+a<-fdata$yan_a
+fm<-0
+out<-fopt(mvol, po, opt,a,fm)
+fdata$y_pred<-out
+
+###residual plot  (residual=observed -predict)
+res<-data.frame(rs=fdata$rs) 
+res$poly<-(fdata$ra-fdata$f_pred)
+res$yan<-(fdata$ra-fdata$y_pred)
+pres<-reshape2::melt(res, id.vars=c("rs"))
+
+plot1<-ggplot(pres, aes(x=rs, y=value,color=variable))+
+       geom_point(aes(fill=variable), alpha=0.3,size=1.2)+
+       geom_smooth(aes(color=variable, fill=variable),method=loess, size=1.2)+
+       scale_color_manual(values = c("#e08214","#542788"))+
+       scale_fill_manual(values = c("#e08214","#542788"))+ 
+       scale_y_continuous(limits=c(-1,1))+ 
+       scale_x_continuous(limits=c(0,1))+ 
+       geom_hline(yintercept=0, color="black",linetype="dashed")+
+       theme(text = element_text(size=16)) 
+plot2<-plot1+theme_linedraw()+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+theme(text = element_text(size=16))
+print(plot2)
+
+
+max(fdata$ra-fdata$y_pred)
+min(fdata$ra-fdata$y_pred)
+#pdf("Field_yan_test.pdf", width=4.5, height=3)
+plot2
+#dev.off()
+
+fit_lm <- lm(res$yan ~ poly(res$rs,2), data = res)
+summary(fit_lm)
+
+
+```
+# Fitting polynomial function
+```{r field}
+fdata <- read.csv(file = 'Yuste.csv') 
+
+fit_lm <- lm(ra ~ rs + I(rs^2), data = fdata)
+        
+        fit_a <- summary(fit_lm)$coefficients[3,1] %>% round(6)
+        fit_b <- summary(fit_lm)$coefficients[2,1] %>% round(6)
+        fit_c <- summary(fit_lm)$coefficients[1,1] %>% round(6)
+        p_a <- summary(fit_lm)$coefficients[3,4]%>% round(6)
+        p_b <- summary(fit_lm)$coefficients[2,4]%>% round(6)
+        p_c <- summary(fit_lm)$coefficients[1,4]%>% round(6)
+        fit_R2 <- summary(fit_lm)$adj.r.squared %>% round(6)
+        
+        fdata$f_pred = predict(fit_lm)
+
+        ##fit yan model
+        ind<-which.max(fdata$ra)
+        opt<-fdata$mvol[ind]
+        fdata1<-fdata[1:ind-1, ]
+        fdata2<-fdata[ind:length(fdata$mvol), ]
+        
+       fm1<-(0.1+opt)/(fdata1$mvol+0.1)
+       fm2<-fdata1$mvol/opt
+       
+       fm3<-(fdata2$porosity-fdata2$mvol)/(fdata2$porosity-opt)
+        
+        for (j in 1:length(fdata1$mvol))
+             {curve.a = nlsLM(rs ~ fm1*fm2^(1+a*2),
+                     start=list(a=0.5),
+                     data = fdata1)
+              yfit_a <- summary(curve.a)$coefficients[1,1] %>% round(6)
+             fdata1$yan_pred= predict(curve.a)}
+       
+        for (i in 1:length(fdata2$mvol))
+        {fdata2$yan_pred= fm3^0.75}
+       
+       yan_result<-rbind(fdata1, fdata2)
+       
+       
+#write.csv(yan_result, "Felton_predition.csv")
+```
+
+```{r plotting}
+       
+rs<-seq(0.05,1,0.05)
+po<-fdata$porosity[1]
+mvol<-rs*po
+f_pred<-fit_a*rs^2+fit_b*rs+fit_c
+pred<-data.frame(rs=rs)
+pred$mvol<-mvol
+pred$emp<-f_pred
+
+ 
+for (i in 1: length(pred$rs))
+  
+if (pred$mvol[i]<opt){
+  pred$yan[i]<-(0.1+opt)/(pred$mvol[i]+0.1)*(pred$mvol[i]/opt)^(1+2*yfit_a)
+  } else 
+  {
+    pred$yan[i]<-((po-pred$mvol[i])/(po-opt))^0.75
+    }
+  
+plot1<-ggplot() + geom_point(data=fdata, aes(x=rs, y=ra), col="#7f3b08",shape=1,size=3,stroke=1)+ 
+  geom_line(data=pred, aes(x=rs, y=emp), col="#e08214",size=1)+
+  geom_line(data=pred, aes(x=rs, y=yan), col="#8073ac",size=1)+
+  scale_y_continuous(limits=c(0,1))+
+       scale_x_continuous(limits=c(0,1))+
+       theme(text = element_text(size=16))
+
+plot2<-plot1+theme_linedraw()+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+theme(text = element_text(size=14))
+print(plot2)
+  
+pdf("Yuste.pdf", width=3, height=2.2)
+plot2
+dev.off()
+
+      
+```
+
