@@ -1,0 +1,328 @@
+---
+title: "distribution"
+author: "Jianqiu Zheng"
+date: "8/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(reshape2)
+library(dplyr)
+library(ggpubr)
+library(scales)
+library(MASS)
+#library(ggbreak) ##create y-axis breaks
+#library(cowplot)##create y-axis breaks
+#library(gg.gap)##create y-axis breaks
+#library(plotrix)##create y-axis breaks
+#library(data.table)##create y-axis breaks
+#library(tidyverse)
+#library(tidypaleo)
+```
+
+
+###spatial distance
+```{r probobility}
+##create the log normal distribution
+y=rnorm(1000,-4,0.25) #define stdev as 0.25,1,2 
+delta<-10^(y) ##diffusion distance
+std<-sd(delta)  ##2.460979e-05
+
+ind<-(sum(delta^3)/1000)^(1/3)##average distance 1e-4
+totv<-sum(delta^3)  #1.249443e-09
+
+median(delta)
+mean(delta)
+#delta[delta<5e-5]<-0
+
+test<-data.frame(y=y)
+test$dist<-delta
+
+index<-seq(1,1000,1)
+test<-data.frame(index=index)
+test$dis<-delta
+ptest<-melt(test, id.vars="index")
+
+p1<-ggplot(ptest, aes(x=index, y=value, color=variable))+geom_point(aes(color=variable), shape=21, size=0.8, stroke=0.2) + scale_color_manual(values=c("#7f3b08","#542788"))+
+  scale_y_log10(name="Distance (m)",limits=c(10^-5, 10^-3),breaks = c(10^-5, 10^-4, 10^-3),
+              labels = trans_format("log10", math_format(10^.x)))
+
+p2<-p1+theme_linedraw()+theme(panel.background = element_rect(fill = "transparent",colour = NA),
+                                    plot.background = element_rect(fill = "transparent",colour = NA),
+                                    panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.position = "none")+
+  theme(text = element_text(size=10))
+print(p2)
+
+
+#pdf("delta1.pdf", width=1.8, height=2)
+p2
+#dev.off()
+
+#####
+
+y1=rnorm(1000,-4,0.5) #define stdev as 0.25, 0.5, 1 
+doc<-10^(y1) ##diffusion distance
+mean(doc)
+sd(doc)
+
+index<-seq(1,1000,1)
+test<-data.frame(index=index)
+test$dis<-delta
+test$con<-doc
+ptest<-melt(test, id.vars="index")
+
+p3<-ggplot(ptest, aes(x=index, y=value, color=variable))+geom_point(aes(color=variable), shape=21, size=0.8, stroke=0.2) + scale_color_manual(values=c("#7f3b08","#542788"))+
+  scale_y_log10(name=" Csoil (M)",limits=c(10^-6, 10^-2),breaks = c(10^-6, 10^-4, 10^-2),
+              labels = trans_format("log10", math_format(10^.x)))
+
+
+
+
+p4<-p3+theme_linedraw()+theme(panel.background = element_rect(fill = "transparent",colour = NA),
+                                    plot.background = element_rect(fill = "transparent",colour = NA),
+                                    panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  theme(text = element_text(size=10),legend.position = "none")
+print(p4)
+
+#pdf("doc.pdf", width=1.8, height=2)
+p4
+#dev.off()
+
+#######vmax
+y2=rnorm(1000,-5.5,0.5) #define stdev as 0.25, 0.5, 1 
+vmax<-10^(y2) ##diffusion distance
+mean(vmax)
+sd(vmax)
+index<-seq(1,1000,1)
+test<-data.frame(index=index)
+test$vm<-vmax
+ptest<-melt(test, id.vars="index")
+
+p5<-ggplot(ptest, aes(x=index, y=value, color=variable))+geom_point(aes(color=variable), shape=21, size=0.8, stroke=0.2) + scale_color_manual(values=c("#7f3b08","#542788"))+
+  scale_y_log10(name="Vmax (d-1)",limits=c(10^-7, 10^-4),breaks = c(10^-7, 10^-6, 10^-5,10^-4),
+              labels = trans_format("log10", math_format(10^.x)))
+
+p6<-p5+theme_linedraw()+theme(panel.background = element_rect(fill = "transparent",colour = NA),
+                                    plot.background = element_rect(fill = "transparent",colour = NA),
+                                    panel.grid.major = element_blank(), panel.grid.minor = element_blank(), legend.position = "none")+
+  theme(text = element_text(size=10))
+print(p6)
+
+
+#pdf("vmax2.pdf", width=1.5, height=2)
+p6
+#dev.off()
+
+
+```
+
+
+
+```{r testing}
+#===========create dataset====================
+#clay po=0.58, org=0.013, bd=1.1, clay=0.58
+#clay loam po=0.71, org=0.101, bd=0.7, clay=0.3
+#loam sand po=0.48, org=0.014, bd=1.35, clay=0.09
+
+rs<-seq(0.05,0.95,0.01)
+po<-0.58
+org<-0.013
+mvol<-po*rs
+bd<-1.1
+soc<-org/12*bd*1e-3  #assum ss 1% as DOC  (mol/cm3) and 10% of these DOC are accessible
+oxy<-(po-mvol)*0.2*0.04  #in mol/L
+  
+#soc<-1e-6 # in mol DOC /cm3 soil (=1000 uM)---0.023
+#oxy<-1e-6 # in mol/cm3 (=1000 uM)
+theta<-mvol/0.8#thaR=0,thaS=0.7
+t1<-theta^(-1/0.33)-1#n=1.5, alpha=0.03, m=0.33
+t2<-t1^(1/1.5)/0.03
+data<-data.frame(rs=rs)
+data$mvol<-mvol
+data$po<-po
+data$bd<-bd
+data$mp<-t2
+data$soc<-soc
+data$oxy<-oxy
+#silt loam po=0.58, org=0.022, bd=1.1, clay=0.17
+#sandy loam po=0.86, org=0.126, bd=0.46, clay=0.04
+#silt clay po=0.62, org=0.016, bd=1, clay=0.46
+```
+
+
+# normalized microbial uptake per colony
+```{r distribution}
+#====Mass transfer distance====
+solveCSS<-function(mvol,po,bd,delta,soc,oxy,kmc,kmo,vmax){
+  Ds0=1.4e-9 #(glucose 10^-11) #aqueous tracer diffusivity at 25 (m2/s)
+  Dg0=2.1e-5#oxygen diffusivity in water
+  fDg<-(po)^1.5*((po-mvol)/(po))^2.5 #gas phase relative diffusivity
+  fDs<-(po)^1.5*((mvol)/(po))^2.5 #aqueous phase relative diffusivity
+  H_o2<-1.3e-6  #mol/cm3/atm
+  hs<-6/(mvol+bd*10)*Ds0*fDs/(delta^2) #DOM delivery (mass transfer rate in d-1)
+  hg<-6/(mvol+bd*1)*Dg0*fDg*H_o2/(delta^2)  #DO delivery (mass transfer rate)
+  ac<-kmc/soc #Km/Csoil
+  bc<-vmax/(hs*soc)#Fuptake/Fdiff
+  t1c<-(1-4*bc/(1+ac+bc)^2)^0.5
+  F1c<-(1+ac+bc)/2/bc*(1-t1c) #uptake flux
+  css<-F1c*kmc/(1-F1c) #steady state concentration
+  cstar<-soc/(soc+kmc+vmax/hs)
+  ag<-kmo/oxy
+  bg<-vmax/(hg*oxy)
+  t1g<-(1-4*bg/(1+ag+bg)^2)^0.5
+  F1g<-(1+ag+bg)/2/bg*(1-t1g)
+  oss<-F1g*kmo/(1-F1g)
+  rate<-vmax*css/(css+kmc)*oss/(oss+kmo) 
+  KI<-2e-6
+  fra<-0.1
+  rate2<-vmax*css*fra/(css*fra+kmc)*oss/(oss+kmo)
+  ana<-vmax*0.02*css*fra/(css*fra+kmc)*KI/(KI+oss)
+  tot<-rate2+ana
+  return (rate)}
+
+simrun<-function(data, delta){
+t_result<-data.frame(nrow=1000)
+v_result<-data.frame(nrow=1000)
+tn_result<-data.frame(nrow=1000)
+vn_result<-data.frame(nrow=1000)
+
+for (i in 1:length(delta)){
+  new<-solveCSS(data$mvol, data$po, data$bd, delta[i], data$soc, data$oxy, 5e-5, 1e-4,0.58e-6)#vmax=1 d-1
+  fvol<-new*delta[i]^3  ###flux of each colony
+  t_result = cbind(t_result, new)
+  v_result = cbind(v_result, fvol)
+  tn_result = cbind(tn_result, new/max(new))
+  vn_result = cbind(vn_result, fvol/max(fvol))
+  }
+ return (list(t_result, v_result, tn_result, vn_result))
+    }
+ 
+stat_sum<-simrun(data, delta)
+
+##prepare output data 
+data1<-stat_sum[[1]] ##new--uptake flux per volume
+data2<-stat_sum[[2]] ##fvol--uptake flux per colony
+
+features <- c(sprintf("pred%02d", seq(0,1000)))
+colnames(data1) <- features
+colnames(data2) <- features
+
+colnames(data1) [1]<- "rs"
+colnames(data2) [1]<- "rs"
+data1$rs<-data$rs  
+data2$rs<-data$rs 
+
+
+delta1<-mean(delta)
+doc1<-mean(doc)
+#vmax1<-mean(vmax)
+ava1<-solveCSS(data$mvol, data$po, data$bd, delta1, data$soc, data$oxy, 5e-5, 1e-4,0.58e-6)#vmax=1 d-1
+#mmax<-max(ava1)
+
+
+pred1<-melt(data1, id.vars="rs")
+mmax<-max(ava1)
+#maxvol<-max(pred1$value) ##max flux per volume
+#qmax<-quantile(pred1$value, probs=0.95)
+#pred1$value[pred1$value>qmax]<-NA
+
+pred1$value<-pred1$value/mmax###flux per volume
+
+
+totv<-sum(delta^3)
+pred2<-melt(data2, id.vars="rs")
+maxcol<-max(pred2$value) ##max flux per colony
+pred2$value<-pred2$value###flux of each colony
+
+
+
+row_sum<-data.frame(rs=data2[,1], sum=rowSums(data2[,-1]))
+row_sum$flux<-row_sum$sum/totv
+
+
+#calculate the macroscopic flux
+
+
+fave<-data.frame(rs=rs)
+fave$mean<-row_sum$flux/max(row_sum$flux)
+pfave<-melt(fave, id.vars="rs")
+
+fmac<-data.frame(rs=rs)
+fmac$mean<-ava1/mmax
+pfmac<-melt(fmac, id.vars="rs")
+
+scaleFUN <- function(x) sprintf("%.1f", x)
+plot1<-ggplot(pred1, aes(x = rs,y=value, color=variable)) + 
+  #facet_grid(value < 1 ~., scales='free_y')+
+  scale_x_continuous(name = "Relative saturation",limits = c(0,1)) +
+  scale_y_continuous(name = "Normalized uptake",labels=scaleFUN,breaks=c(0,1,2,3,4,5))+
+  geom_vline(xintercept=0.5, linetype="dashed", size=0.2)+
+  geom_line(aes(group=variable), color="#b35806",linetype="solid", alpha=0.03,size=0.2)+
+  geom_line(data=pfave, color="#b35806", size=1)+
+  geom_line(data=pfmac, color="#4d4f53", size=1)
+##orange"#b35806",
+
+
+plot2<-plot1+theme_linedraw()+theme(panel.background = element_rect(fill = "transparent",colour = NA),
+                                    plot.background = element_rect(fill = "transparent",colour = NA),
+                                     panel.grid = element_blank(),panel.grid.minor = element_blank())+
+  theme(text = element_text(size=10), strip.background = element_blank(),
+  strip.text.x = element_blank())
+print(plot2)
+
+
+
+
+#pdf("clay_doc2.pdf", width=2.4, height=2.0)
+#plot2
+#dev.off()
+fscale<-data.frame(rs=rs)
+fscale$mean<-row_sum$flux/max(row_sum$flux)
+psc<-melt(fscale, id.vars="rs")
+
+plot3<-ggplot(psc, aes(x = rs,y=value)) + geom_line(color="#b35806", size=1)+
+  #facet_grid(value < 1 ~., scales='free_y')+
+  scale_x_continuous(name = "Relative saturation",limits = c(0,1)) +
+  scale_y_continuous(name = "Normalized uptake",labels=scaleFUN,breaks=c(0,1,2,3,4,5))+
+  geom_vline(xintercept=0.5, linetype="dashed", size=0.2)+
+  geom_line(data=pfmac, color="#4d4f53", size=1)
+plot4<-plot3+theme_linedraw()+theme(panel.background = element_rect(fill = "transparent",colour = NA),
+                                    plot.background = element_rect(fill = "transparent",colour = NA),
+                                     panel.grid = element_blank(),panel.grid.minor = element_blank())+
+  theme(text = element_text(size=10), strip.background = element_blank(),
+  strip.text.x = element_blank())
+print(plot4)
+
+pdf("clay.pdf", width=2.4, height=2.0)
+plot4
+dev.off()
+
+```
+
+
+
+
+```{r label}
+test<-data.frame(rs=rs)
+test$data1<-0.2
+test$data3<-0.8
+ptest<-reshape2::melt(test, id.vars=c("rs"))
+
+plot1<-ggplot(ptest, aes(x = rs,y=value, color=variable)) + 
+  scale_x_continuous(name = "Relative saturation",limits = c(0,1)) +
+  scale_y_continuous(name = "Relative HR",limits = c(0,1))+
+  geom_line(aes(color=variable),size=1.2)+
+  scale_color_manual(values = c("#b35806", "#4d4f53"))
+
+plot2<-plot1+theme_linedraw()+theme(panel.background = element_rect(fill = "transparent",colour = NA),
+                                    plot.background = element_rect(fill = "transparent",colour = NA),
+                                    panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  theme(text = element_text(size=16))
+
+pdf("labels.pdf", width=2.2, height=2.0)
+plot2
+dev.off()
+
+```
+
